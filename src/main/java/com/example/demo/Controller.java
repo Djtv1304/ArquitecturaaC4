@@ -1,12 +1,13 @@
 package com.example.demo;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -20,24 +21,33 @@ public class Controller {
         String url = "https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet" +
                 "/rest/ConsolidadoContribuyente/existePorNumeroRuc?numeroRuc=" + cedula;
 
-        ResponseEntity<String> responseEntity = restTemplate.getForEntity(url, String.class);
-        String response = responseEntity.getBody();
+        String response = null;
+
+        try {
+            ResponseEntity<String> responseEntity = restTemplate.getForEntity(url, String.class);
+            response = responseEntity.getBody();
+        } catch (HttpClientErrorException e) {
+            response = e.getResponseBodyAsString();
+        }
 
         ObjectMapper mapper = new ObjectMapper();
         Map<String, Object> responseJson = new HashMap<>();
 
         try {
-            responseJson = mapper.readValue(response, Map.class);
+            Object responseObject = mapper.readValue(response, Object.class);
+
+            if (responseObject instanceof Boolean) {
+                responseJson.put("isCedulaExistente", (Boolean) responseObject);
+            } else if (responseObject instanceof Map) {
+                responseJson = (Map<String, Object>) responseObject;
+                if (responseJson.containsKey("mensaje")) {
+                    responseJson.put("isCedulaExistente", false);
+                }
+            }
         } catch (JsonProcessingException e) {
             e.printStackTrace();
         }
 
-        if (responseJson.containsKey("mensaje")) {
-            responseJson.put("isCedulaExistente", false);
-        } else {
-            responseJson.put("isCedulaExistente", true);
-        }
-        System.out.println("SUPUESTO JSON:\n" + response);
         return responseJson;
     }
 }
